@@ -11,6 +11,9 @@ object Application extends Controller {
 	import scalaz.concurrent.Task
 	import scala.concurrent.Future
 
+	import scalaz.stream._
+  import Process._
+
 	import scala.concurrent.ExecutionContext.Implicits.global
 
 	def toF[T](task: Task[T]): Future[T] = {
@@ -26,9 +29,9 @@ object Application extends Controller {
     p.future
   }
 
-
   def index = Action.async {
-    val log = toF(Json.test.runLog)
+  	val json = """{ "foo": 42, "bar": 23 }"""
+    val log = toF((Json.tokenise(json) |> Json.parser).runLog)
     log.map(s => Ok(s.toString))
   }
 
