@@ -30,9 +30,17 @@ object Application extends Controller {
   }
 
   def index = Action.async {
-  	val json = """{ "foo": 42, "bar": 23 }"""
-    val log = toF((Json.tokenise(json) |> Json.parser).runLog)
-    log.map(s => Ok(s.toString))
+
+  	import play.api.libs.json.JsString
+  	import play.api.data.mapping.Path
+  	import Parser.Tokens._
+
+    val x = Process.emitAll(Seq(Name("toto"), Value(JsString("tutu")))) |> Json.parser
+    Future(Ok(x.toList.toString))
+
+  	// val json = """{ "foo": 42, "bar": 23, "arr": 1 }"""
+   //  val log = toF((Json.tokenise(json) |> Json.parser).runLog)
+   //  log.map(s => Ok(s.toString))
   }
 
 }

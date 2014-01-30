@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
   jdbc,
   anorm,
   cache,
-  "org.scalaz.stream" %% "scalaz-stream" % "0.3"
+  "org.scalaz.stream" %% "scalaz-stream" % "0.3.1"
 )
 
 play.Project.playScalaSettings

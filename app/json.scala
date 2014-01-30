@@ -19,51 +19,38 @@ object Parser {
   }
   import Tokens._
 
-  def parseError(e: String) = Process.fail(new RuntimeException(e))
+  def pos(p: => Process1[Token, Token]) = {
+    def up(path: Path): Path = Path(path.path.dropRight(1))
 
-  private def up(p: Path): Path = Path(p.path.dropRight(1))
-
-  // def pos(p: Process1[Token, Token]) = Process.receive1[(Path, Token), (Path, Token)] {
-  //   case (path, Field(name)) => p.map(t => (path \ name, t) )
-  //   case (path, EObj) if path == Path => throw End
-  //   case (path, EObj) => p.map(t => (up(path), t) )
-  //   case x => Process.emit(x)
-  // }
-
-  val value = Process.receive1[Token, Token]{
-    case t@Value(_) => Process.emit(t)
+    receive1[(Path, Token), (Path, Token)] {
+      case (path, n@Name(name)) => emit(n) |> p |> receive1{ nn => emit(path \ name -> nn) }
+      case (path, EObj) if path == Path => throw End
+      case (path, EObj) => emit((up(path), EObj))
+      case (path, t) => emit(t) |> p |> receive1(tt => emit(path -> tt))
+    }
   }
 
-  val name: Process1[Token, Token] = Process.receive1[Token, Token] {
-    case t@Name(_) => Process.emit(t)
-  }
+  def parser(expected: String)(f: PartialFunction[Token, Process1[Token, Token]]) =
+    pos(receive1(f)) //onFailure Process.fail(new RuntimeException(s"expected: $expected"))
 
-  val sobj = Process.receive1[Token, Token] {
-    case SObj => Process.emit(SObj)
-  }
+  val value = parser("value"){ case t@Value(_) => emit(t) }
+  val name = parser("name") { case t@Name(_) => emit(t) }
+  val sobj = parser("sobj") { case SObj => emit(SObj) }
+  val eobj = parser("eobj") { case EObj => emit(EObj) }
+  val sarr = parser("sarr") { case SArr => emit(SArr) }
+  val earr = parser("earr") { case EObj => emit(EObj) }
 
-  val eobj = Process.receive1[Token, Token] {
-    case EObj => Process.emit(EObj)
-  }
-
-  val sarr = Process.receive1[Token, Token] {
-    case SArr => Process.emit(SArr)
-  }
-
-  val earr = Process.receive1[Token, Token] {
-    case EObj => Process.emit(EObj)
-  }
-
-  val field = name ++ json
-  val obj = sobj ++ repeat(field) ++ eobj
-  val arr = sarr ++ repeat(json) ++ earr
-  val json: Process1[Token, Token] = arr orElse obj orElse value
+  lazy val field = name ++ value
+  lazy val obj = sobj ++ repeat(field) ++ eobj
+  lazy val arr = sarr ++ repeat(json) ++ earr
+  lazy val json: Process1[(Path, Token), (Path, Token)] = value onFailure arr onFailure obj
 
 }
 
 object Json {
 
   import scalaz.concurrent.Task
+
   import scalaz.stream._
   import Process._
 
@@ -85,7 +72,7 @@ object Json {
     val jp = jsonF.createJsonParser(json)
 
     io.resource(Task.delay(jp))(src => Task.delay(src.close)) { src =>
-      jp.nextToken()
+
       Task.delay {
         val jtoken = jp.nextToken()
         if(jtoken != null) {
@@ -100,9 +87,8 @@ object Json {
             case n if n == START_OBJECT => SObj
             case n if n == END_OBJECT => EObj
             case n if n == FIELD_NAME => Name(jp.getText)
-            case n if n == NOT_AVAILABLE => SArr
+            case n if n == NOT_AVAILABLE => ???
             case n if n == START_ARRAY => SArr
-            case n if n == START_OBJECT => SObj
             case n if n == VALUE_EMBEDDED_OBJECT => ???
           }
 
@@ -111,9 +97,13 @@ object Json {
     }
   }
 
-  def parser: Process.Process1[Token, (Path, JsValue)] = Process.receive1[Token, (Path, JsValue)] {
-    case s@Value(v) => emit(Path -> v) ++ parser
-    case _ => parser
-  }
+  def rec(path: Path)/*: Process.Process1[Token, (Path, JsValue)]*/ =
+    (receive1{ (x: Token) => emit(path -> x) }.repeat |> Parser.field)
+      // .flatMap {
+      //   case t@(p, Value(js)) => println(t); emit(p -> js) ++ rec(p)
+      //   case x => println(x); rec(path)
+      // }
+
+  val parser = rec(Path)
 
 }
