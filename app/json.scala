@@ -31,7 +31,7 @@ object Parser {
   }
 
   def parser(expected: String)(f: PartialFunction[Token, Process1[Token, Token]]) =
-    pos(receive1(f)) //onFailure Process.fail(new RuntimeException(s"expected: $expected"))
+    receive1(f) //onFailure Process.fail(new RuntimeException(s"expected: $expected"))
 
   val value = parser("value"){ case t@Value(_) => emit(t) }
   val name = parser("name") { case t@Name(_) => emit(t) }
@@ -43,7 +43,7 @@ object Parser {
   lazy val field = name ++ value
   lazy val obj = sobj ++ repeat(field) ++ eobj
   lazy val arr = sarr ++ repeat(json) ++ earr
-  lazy val json: Process1[(Path, Token), (Path, Token)] = value onFailure arr onFailure obj
+  lazy val json: Process1[Token, Token] = value onFailure arr onFailure obj
 
 }
 
@@ -97,13 +97,14 @@ object Json {
     }
   }
 
-  def rec(path: Path)/*: Process.Process1[Token, (Path, JsValue)]*/ =
-    (receive1{ (x: Token) => emit(path -> x) }.repeat |> Parser.field)
-      // .flatMap {
-      //   case t@(p, Value(js)) => println(t); emit(p -> js) ++ rec(p)
-      //   case x => println(x); rec(path)
-      // }
+  def trackPath =
+    Process.state(Path()).flatMap { case (get, set) =>
+      val prev = get
+      val next = prev \ "foo"
+      eval(set(next)).drain ++ emit(next)
+    }
 
-  val parser = rec(Path)
+  val parser = trackPath zip Parser.field
+
 
 }

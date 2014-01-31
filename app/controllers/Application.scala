@@ -35,7 +35,10 @@ object Application extends Controller {
   	import play.api.data.mapping.Path
   	import Parser.Tokens._
 
-    val x = Process.emitAll(Seq(Name("toto"), Value(JsString("tutu")))) |> Json.parser
+    val x = Process.emitAll(Seq(
+      Name("toto"), Value(JsString("tutu")),
+      Name("toto2"), Value(JsString("tutu2"))
+    )) |> Json.parser
     Future(Ok(x.toList.toString))
 
   	// val json = """{ "foo": 42, "bar": 23, "arr": 1 }"""
