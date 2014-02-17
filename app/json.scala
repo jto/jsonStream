@@ -19,19 +19,8 @@ object Parser {
   }
   import Tokens._
 
-  def pos(p: => Process1[Token, Token]) = {
-    def up(path: Path): Path = Path(path.path.dropRight(1))
-
-    receive1[(Path, Token), (Path, Token)] {
-      case (path, n@Name(name)) => emit(n) |> p |> receive1{ nn => emit(path \ name -> nn) }
-      case (path, EObj) if path == Path => throw End
-      case (path, EObj) => emit((up(path), EObj))
-      case (path, t) => emit(t) |> p |> receive1(tt => emit(path -> tt))
-    }
-  }
-
   def parser(expected: String)(f: PartialFunction[Token, Process1[Token, Token]]) =
-    receive1(f) //onFailure Process.fail(new RuntimeException(s"expected: $expected"))
+    receive1(f) // onFailure Process.fail(new RuntimeException(s"expected: $expected"))
 
   val value = parser("value"){ case t@Value(_) => emit(t) }
   val name = parser("name") { case t@Name(_) => emit(t) }
@@ -97,14 +86,18 @@ object Json {
     }
   }
 
-  def trackPath =
-    Process.state(Path()).flatMap { case (get, set) =>
-      val prev = get
-      val next = prev \ "foo"
-      eval(set(next)).drain ++ emit(next)
+  val parse: Process.Process1[Token, (Path, Token)] = Parser.json |> {
+    def up(path: Path): Path = Path(path.path.dropRight(1))
+
+    def trackPath(p: Path): Process.Process1[Token, (Path, Token)]  = receive1 {
+      case n@Name(name) => trackPath(p \ name)
+      case EObj if p == Path => throw End
+      case EObj => trackPath(up(p))
+      case t => emitSeq(Seq(p -> t), trackPath(p))
     }
 
-  val parser = trackPath zip Parser.field
+    trackPath(Path)
+  }
 
 
 }
