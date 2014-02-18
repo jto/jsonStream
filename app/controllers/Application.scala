@@ -36,9 +36,9 @@ object Application extends Controller {
   	import Parser.Tokens._
 
     val x = Process.emitAll(Seq(
-      Name("toto"), Value(JsString("tutu")),
-      Name("toto2"), Value(JsString("tutu2"))
-    )) |> Json.parser
+      SObj, Name("toto"), Value(JsString("tutu")),
+      SObj, Name("toto2"), Value(JsString("tutu2")), EObj, EObj
+    )) |> Json.withPath
     Future(Ok(x.toList.toString))
 
   	// val json = """{ "foo": 42, "bar": 23, "arr": 1 }"""

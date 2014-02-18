@@ -20,7 +20,7 @@ object Parser {
   import Tokens._
 
   def parser(expected: String)(f: PartialFunction[Token, Process1[Token, Token]]) =
-    receive1(f) // onFailure Process.fail(new RuntimeException(s"expected: $expected"))
+    receive1{ (x: Token) => println(x); f(x) } // onFailure Process.fail(new RuntimeException(s"expected: $expected"))
 
   val value = parser("value"){ case t@Value(_) => emit(t) }
   val name = parser("name") { case t@Name(_) => emit(t) }
@@ -86,7 +86,7 @@ object Json {
     }
   }
 
-  val parse: Process.Process1[Token, (Path, Token)] = Parser.json |> {
+  val withPath = {
     def up(path: Path): Path = Path(path.path.dropRight(1))
 
     def trackPath(p: Path): Process.Process1[Token, (Path, Token)]  = receive1 {
@@ -98,6 +98,8 @@ object Json {
 
     trackPath(Path)
   }
+
+  // val parse = Parser.json |> withPath
 
 
 }
